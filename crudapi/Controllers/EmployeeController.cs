@@ -1,8 +1,8 @@
 ﻿using crudapi.Models;
+using crudapi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace crudapi.Controllers
 {
@@ -10,77 +10,99 @@ namespace crudapi.Controllers
     [ApiController]
     public class EmployeeController : ControllerBase
     {
-        private readonly EmployeeContext _context;
+        private readonly EmployeeService _service;
 
-        public EmployeeController(EmployeeContext context)
+        public EmployeeController(EmployeeService service)
         {
-            _context = context;        }
-        // GET: api/<EmployeeController>
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<EmpTable>>> GetEmployees()
-        {
-            return await _context.EmpTables.ToListAsync();
+            _service = service;
         }
 
-        // GET api/<EmployeeController>/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<EmpTable>> GetEmployee(int id)
+        [HttpGet]
+        public async Task<IActionResult> GetEmployees()
         {
-            var employee = await _context.EmpTables.FindAsync(id);
+            var employees = await _service.GetAllEmployees();
+
+            if (employees == null )
+            {
+                return NotFound("No employees found in the system.");
+            }
+
+            return Ok(employees);
+        }
+
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetEmployee(int id)
+        {
+            var employee = await _service.GetEmployeeById(id);
 
             if (employee == null)
             {
-                return NotFound();
+                return NotFound($"Employee with ID {id} was not found.");
             }
 
-            return employee;
+            return Ok(employee);
         }
-        // POST api/<EmployeeController>
+
         [HttpPost]
-        public async Task<ActionResult<EmpTable>> PostEmployee(EmpTable employee)
+        public async Task<IActionResult> PostEmployee(EmpTable employee)
         {
-            _context.EmpTables.Add(employee);
-            await _context.SaveChangesAsync();
+            if (employee == null)
+            {
+                return BadRequest("Invalid employee data. Please provide valid details.");
+            }
 
-            return CreatedAtAction(nameof(GetEmployee), new { id = employee.Eid }, employee);
+            try
+            {
+                await _service.AddEmployee(employee);
+                return CreatedAtAction(nameof(GetEmployee), new { id = employee.Eid }, employee);
+            }
+            catch
+            {
+                return StatusCode(500, "An error occurred while adding the employee.");
+            }
         }
 
-
-        // PUT api/<EmployeeController>/5
         [HttpPut("{id}")]
         public async Task<IActionResult> PutEmployee(int id, EmpTable employee)
         {
             if (id != employee.Eid)
             {
-                return BadRequest();
+                return BadRequest("The employee ID in the request does not match the provided data.");
             }
 
-            _context.Entry(employee).State = EntityState.Modified;
+            if (!_service.EmployeeExists(id))
+            {
+                return NotFound($"Employee with ID {id} was not found.");
+            }
 
-
-            return NoContent();
+            try
+            {
+                await _service.UpdateEmployee(employee);
+                return Ok("Employee updated successfully.");
+            }
+            catch
+            {
+                return StatusCode(500, "An error occurred while updating the employee.");
+            }
         }
 
-        // DELETE api/<EmployeeController>/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteEmployee(int id)
         {
-            var employee = await _context.EmpTables.FindAsync(id);
-            if (employee == null)
+            if (!_service.EmployeeExists(id))
             {
-                return NotFound();
+                return NotFound($"Employee with ID {id} was not found.");
             }
 
-            _context.EmpTables.Remove(employee);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        private bool EmployeeExists(int id)
-        {
-            return _context.EmpTables.Any(e => e.Eid == id);
+            try
+            {
+                await _service.DeleteEmployee(id);
+                return Ok("Employee deleted successfully.");
+            }
+            catch
+            {
+                return StatusCode(500, "An error occurred while deleting the employee.");
+            }
         }
     }
 }
-
